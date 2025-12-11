@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { saveToken, getToken, removeToken } from '@/utils/storage'
-import { fetchPlayerRecords } from '@/services/diving-fish'
+import { fetchPlayerRecords, fetchMusicData, clearMusicCache } from '@/services/diving-fish'
 
 export const useUserStore = defineStore('user', () => {
     // State
@@ -59,7 +59,9 @@ export const useUserStore = defineStore('user', () => {
 
                 // Handle B50 data structure
                 if (data.charts) {
-                    records.value = [...(data.charts.dx || []), ...(data.charts.sd || [])]
+                    const dx = (data.charts.dx || []).map(r => ({ ...r, type: 'DX' }))
+                    const sd = (data.charts.sd || []).map(r => ({ ...r, type: 'SD' }))
+                    records.value = [...dx, ...sd]
                 } else if (Array.isArray(data.records)) {
                     records.value = data.records
                 } else {
@@ -81,6 +83,38 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
+    const refreshMusic = async () => {
+        isLoading.value = true
+        try {
+            await fetchMusicData(true)
+            return true
+        } catch (err) {
+            error.value = '刷新乐曲数据失败'
+            return false
+        } finally {
+            isLoading.value = false
+        }
+    }
+
+    const clearCache = (type) => {
+        if (type === 'music' || type === 'all') {
+            clearMusicCache()
+        }
+        if (type === 'records' || type === 'all') {
+            records.value = []
+            localStorage.removeItem('maimai_records')
+            // Also clear profile if clearing records? Maybe not strictly necessary but cleaner
+            if (type === 'all') {
+                profile.value = { nickname: '', rating: 0, title: '', course_rank: 0, class_rank: 0 }
+                localStorage.removeItem('maimai_profile')
+            }
+        }
+        if (type === 'other' || type === 'all') {
+            localStorage.removeItem('generator_config')
+            localStorage.removeItem('generator_cells')
+        }
+    }
+
     return {
         token,
         profile,
@@ -90,6 +124,8 @@ export const useUserStore = defineStore('user', () => {
         isAuthenticated,
         setToken,
         clearUser,
-        fetchProfile
+        fetchProfile,
+        refreshMusic,
+        clearCache
     }
 })

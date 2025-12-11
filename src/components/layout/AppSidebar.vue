@@ -1,11 +1,13 @@
 <script setup>
 import { RouterLink } from 'vue-router'
-import { Home, Palette, Calculator, HelpCircle, Github, Settings } from 'lucide-vue-next'
+import { Home, Palette, Calculator, HelpCircle, Github, Settings, Music, Trophy } from 'lucide-vue-next'
 
 const emit = defineEmits(['close-mobile'])
 
 const menuItems = [
   { name: '首页', path: '/', icon: Home },
+  { name: '乐曲查询', path: '/music', icon: Music },
+  { name: 'B50查询', path: '/b50', icon: Trophy },
   { name: '喜好表生成器', path: '/generator/preference-table', icon: Palette },
   // { name: 'B50计算器', path: '/calculator', icon: Calculator }, // Future
   { name: '设置 & 数据源', path: '/settings', icon: Settings },

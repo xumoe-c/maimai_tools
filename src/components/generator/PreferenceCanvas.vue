@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { getCoverUrl as getServiceCoverUrl } from '@/services/diving-fish'
+import { markAsFailed, getCoverUrlWithFallback } from '@/utils/image-manager'
 import { toPng } from 'html-to-image'
 import { Download, Trash2, Image as ImageIcon } from 'lucide-vue-next'
 
@@ -19,7 +20,14 @@ const gridCells = computed(() => props.cells)
 
 const getCoverUrl = (song) => {
   if (!song) return null
-  return getServiceCoverUrl(song.id)
+  const url = getServiceCoverUrl(song.id)
+  return getCoverUrlWithFallback(url)
+}
+
+const handleImageError = (song) => {
+  if (!song) return
+  const url = getServiceCoverUrl(song.id)
+  markAsFailed(url)
 }
 
 const exportImage = async () => {
@@ -125,6 +133,7 @@ const borderClasses = computed(() => {
               <img 
                 v-if="cell.song" 
                 :src="getCoverUrl(cell.song)" 
+                @error="handleImageError(cell.song)"
                 class="absolute inset-0 w-full h-full object-cover"
                 crossorigin="anonymous"
                 referrerpolicy="no-referrer"

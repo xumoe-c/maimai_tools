@@ -12,20 +12,36 @@ const api = axios.create({
 let musicDataCache = null
 let musicMapCache = null
 
-export const fetchMusicData = async () => {
-    if (musicDataCache) return musicDataCache
+export const fetchMusicData = async (forceRefresh = false) => {
+    // 1. Try memory cache
+    if (!forceRefresh && musicDataCache) return musicDataCache
 
+    // 2. Try localStorage cache
+    if (!forceRefresh) {
+        const stored = localStorage.getItem('maimai_music_data')
+        if (stored) {
+            try {
+                musicDataCache = JSON.parse(stored)
+                buildMusicMap()
+                console.log(`Loaded ${musicDataCache.length} songs from localStorage`)
+                return musicDataCache
+            } catch (e) {
+                console.error('Failed to parse stored music data', e)
+                localStorage.removeItem('maimai_music_data')
+            }
+        }
+    }
+
+    // 3. Fetch from API
     try {
         const response = await api.get('/music_data')
         musicDataCache = response.data
 
-        // Build a map for easy lookup by ID
-        musicMapCache = new Map()
-        musicDataCache.forEach(song => {
-            musicMapCache.set(song.id, song)
-        })
+        // Save to localStorage
+        localStorage.setItem('maimai_music_data', JSON.stringify(musicDataCache))
 
-        console.log(`Loaded ${musicDataCache.length} songs`)
+        buildMusicMap()
+        console.log(`Loaded ${musicDataCache.length} songs from API`)
         return musicDataCache
     } catch (error) {
         console.error('Failed to fetch music data:', error)
@@ -33,19 +49,39 @@ export const fetchMusicData = async () => {
     }
 }
 
+const buildMusicMap = () => {
+    if (!musicDataCache) return
+    musicMapCache = new Map()
+    musicDataCache.forEach(song => {
+        musicMapCache.set(song.id, song)
+    })
+}
+
+export const clearMusicCache = () => {
+    musicDataCache = null
+    musicMapCache = null
+    localStorage.removeItem('maimai_music_data')
+}
+
 export const getSongById = (id) => {
     if (!musicMapCache) return null
-    return musicMapCache.get(id)
+    // Try exact match
+    if (musicMapCache.has(id)) return musicMapCache.get(id)
+    // Try string match
+    if (musicMapCache.has(String(id))) return musicMapCache.get(String(id))
+    // Try number match
+    const numId = Number(id)
+    if (!isNaN(numId) && musicMapCache.has(numId)) return musicMapCache.get(numId)
+
+    return null
 }
 
 export const getCoverUrl = (songId) => {
-    let id = parseInt(songId)
-    if (id > 10000 && id <= 11000) {
-        id -= 10000
-    }
-    const originalUrl = `https://www.diving-fish.com/covers/${id.toString().padStart(5, '0')}.png`
-    // Use weserv.nl as a CORS proxy to enable html2canvas export
-    return `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}`
+    // Use local static resources from EasyMai
+    // The static folder is configured as publicDir in vite.config.js
+    // Images are in /maicover/ folder with .jpg extension
+    const id = parseInt(songId)
+    return `/maicover/${id}.jpg`
 }
 
 export const fetchPlayerProfile = async (username) => {
@@ -101,5 +137,61 @@ const fetchByQuery = async (payload) => {
             }
         }
         throw error
+    }
+}
+
+// Cache for alias data
+let aliasMapCache = null
+
+export const fetchAllAliases = async () => {
+    if (aliasMapCache) return aliasMapCache
+
+    try {
+        const response = await axios.get('https://www.yuzuchan.moe/api/maimaidx/maimaidxalias')
+        const aliases = response.data.content
+        aliasMapCache = new Map()
+        aliases.forEach(item => {
+            if (item.Alias) {
+                // Ensure SongID is stored as Number to match musicData
+                aliasMapCache.set(Number(item.SongID), item.Alias)
+            }
+        })
+        return aliasMapCache
+    } catch (error) {
+        console.error('Failed to fetch aliases:', error)
+        return new Map() // Return empty map on failure
+    }
+}
+
+export const fetchSongAliases = async (songId) => {
+    try {
+        // Use Yuzu API for aliases as Diving Fish doesn't provide one publicly
+        const response = await axios.get(`https://www.yuzuchan.moe/api/maimaidx/getsongsalias`, {
+            params: { song_id: songId }
+        })
+
+        if (response.data && response.data.content && response.data.content.Alias) {
+            return response.data.content.Alias
+        }
+        return []
+    } catch (error) {
+        console.warn('Failed to fetch aliases', error)
+        return []
+    }
+}
+
+// Cache for chart stats
+let chartStatsCache = null
+
+export const fetchChartStats = async () => {
+    if (chartStatsCache) return chartStatsCache
+
+    try {
+        const response = await api.get('/chart_stats')
+        chartStatsCache = response.data
+        return chartStatsCache
+    } catch (error) {
+        console.warn('Failed to fetch chart stats', error)
+        return {}
     }
 }

@@ -23,6 +23,21 @@ const router = createRouter({
             path: '/settings',
             name: 'settings',
             component: () => import('../views/SettingsView.vue')
+        },
+        {
+            path: '/music',
+            name: 'music',
+            component: () => import('../views/MusicView.vue')
+        },
+        {
+            path: '/b50',
+            name: 'b50',
+            component: () => import('../views/B50View.vue')
+        },
+        {
+            path: '/song/:id',
+            name: 'song-detail',
+            component: () => import('../views/SongDetailView.vue')
         }
     ]
 })

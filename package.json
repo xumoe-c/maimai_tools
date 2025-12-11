@@ -12,7 +12,6 @@
     "axios": "^1.13.2",
     "crypto-js": "^4.2.0",
     "html-to-image": "^1.11.13",
-    "html2canvas": "^1.4.1",
     "js-cookie": "^3.0.5",
     "lucide-vue-next": "^0.344.0",
     "pinia": "^3.0.4",

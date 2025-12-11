@@ -2,7 +2,7 @@
 import { RouterView } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import { ref } from 'vue'
-import { Menu } from 'lucide-vue-next'
+import { Menu, ShieldCheck, Globe } from 'lucide-vue-next'
 
 const isMobileMenuOpen = ref(false)
 </script>
@@ -35,8 +35,27 @@ const isMobileMenuOpen = ref(false)
     ></div>
 
     <!-- Main Content -->
-    <main class="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto h-[calc(100vh-64px)] md:h-screen">
-      <RouterView />
+    <main class="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto h-[calc(100vh-64px)] md:h-screen flex flex-col">
+      <div class="flex-1">
+        <RouterView />
+      </div>
+
+      <!-- Footer -->
+      <footer class="mt-12 py-6 border-t-2 border-gray-200 text-center text-sm text-gray-500 font-bold space-y-2">
+        <div class="flex items-center justify-center gap-2">
+          <span>© 徐某徐某徐某 2025-2026</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <a href="https://beian.miit.gov.cn/" target="_blank" class="hover:text-black transition-colors flex items-center gap-1">
+            <Globe :size="14" />
+            陕ICP备2024056353号-4
+          </a>
+          <a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=61011602000749" target="_blank" class="hover:text-black transition-colors flex items-center gap-1">
+            <ShieldCheck :size="14" />
+            陕公网安备61011602000749号
+          </a>
+        </div>
+      </footer>
     </main>
   </div>
 </template>

@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { Search, X, Filter, Loader2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Search, X, Filter, Loader2, ChevronLeft, ChevronRight, ArrowUpDown, SlidersHorizontal } from 'lucide-vue-next'
 import { useUserStore } from '@/stores/user'
-import { getCoverUrl as getServiceCoverUrl } from '@/services/diving-fish'
+import { getCoverUrl as getServiceCoverUrl, fetchAllAliases } from '@/services/diving-fish'
+import { markAsFailed, getCoverUrlWithFallback } from '@/utils/image-manager'
+import { getVersionName } from '@/utils/version-map'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -14,23 +16,55 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'select'])
 const userStore = useUserStore()
+const aliasMap = ref(new Map())
 
-onMounted(() => {
+onMounted(async () => {
   // Ensure records are loaded if token exists
   if (userStore.token && userStore.records.length === 0 && !userStore.isLoading) {
     userStore.fetchProfile()
+  }
+  
+  try {
+    aliasMap.value = await fetchAllAliases()
+  } catch (e) {
+    console.error("Failed to load aliases", e)
   }
 })
 
 const searchQuery = ref('')
 const selectedCategory = ref('all')
 const selectedVersion = ref('all')
-const showFilters = ref(false)
+const showAdvancedFilters = ref(false)
 
 // Pagination
 const currentPage = ref(1)
 const itemsPerPage = 24
 
+// Sorting
+const sortBy = ref('default')
+const sortDesc = ref(false)
+
+const sortOptions = [
+  { label: '默认', value: 'default' },
+  { label: 'ID', value: 'id' },
+  { label: '定数', value: 'ds' },
+  { label: '达成率', value: 'achievement' },
+]
+
+// Advanced Filters
+const minDs = ref('')
+const maxDs = ref('')
+const dsDiffIndex = ref(-1) // -1 = Any
+
+const minAch = ref('')
+const maxAch = ref('')
+const achDiffIndex = ref(-1) // -1 = Any
+const selectedRanks = ref([])
+
+const diffLabels = ['Basic', 'Advanced', 'Expert', 'Master', 'Re:Master']
+const rankOptions = ['SSS+', 'SSS', 'SS+', 'SS', 'S+', 'S', 'AAA', 'AA', 'A']
+
+// Categories
 const categories = [
   { id: 'all', name: '全部流派' },
   { id: 'my-records', name: '我的记录' },
@@ -51,17 +85,15 @@ const versions = computed(() => {
 const filteredSongs = computed(() => {
   if (!props.musicData) return []
   
-  let result = props.musicData
+  let result = [...props.musicData]
 
-  // Filter by category
+  // 1. Filter by category
   if (selectedCategory.value === 'my-records') {
-    // Use String conversion to ensure ID matching works regardless of type (number vs string)
     const playedIds = new Set(userStore.records.map(r => String(r.song_id)))
     result = result.filter(song => playedIds.has(String(song.id)))
   } else if (selectedCategory.value !== 'all') {
     const category = categories.find(c => c.id === selectedCategory.value)
     if (category && category.aliases) {
-      // Normalize genre for comparison (trim spaces)
       result = result.filter(song => {
         const genre = song.basic_info.genre.trim()
         return category.aliases.includes(genre)
@@ -71,21 +103,95 @@ const filteredSongs = computed(() => {
     }
   }
 
-  // Filter by version
+  // 2. Filter by version
   if (selectedVersion.value !== 'all') {
     result = result.filter(song => song.basic_info.from === selectedVersion.value)
   }
 
-  // Filter by search query
+  // 3. Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(song => {
-      const title = song.title.toLowerCase()
-      const artist = song.basic_info.artist.toLowerCase()
-      const id = song.id.toString()
-      return title.includes(query) || artist.includes(query) || id.includes(query)
+      if (song.title.toLowerCase().includes(query)) return true
+      if (song.id.toString().includes(query)) return true
+      const alias = aliasMap.value.get(Number(song.id)) // Ensure ID is number for map lookup
+      if (alias && alias.some(a => a.toLowerCase().includes(query))) return true
+      if (song.basic_info.artist.toLowerCase().includes(query)) return true
+      if (song.charts && song.charts.some(chart => chart.charter.toLowerCase().includes(query))) return true
+      return false
     })
   }
+
+  // 4. DS Filter
+  if (minDs.value !== '' || maxDs.value !== '') {
+    const min = minDs.value === '' ? 0 : Number(minDs.value)
+    const max = maxDs.value === '' ? 99 : Number(maxDs.value)
+    
+    result = result.filter(song => {
+      if (dsDiffIndex.value === -1) {
+        return song.ds.some(ds => ds >= min && ds <= max)
+      } else {
+        const ds = song.ds[dsDiffIndex.value]
+        return ds !== undefined && ds >= min && ds <= max
+      }
+    })
+  }
+
+  // 5. Achievement Filter
+  if (minAch.value !== '' || maxAch.value !== '' || selectedRanks.value.length > 0) {
+    const min = minAch.value === '' ? 0 : Number(minAch.value)
+    const max = maxAch.value === '' ? 101 : Number(maxAch.value)
+    
+    result = result.filter(song => {
+      const records = userRecordMap.value.get(Number(song.id))
+      if (!records) return false
+
+      if (achDiffIndex.value === -1) {
+        return Object.values(records).some(r => {
+          const inRange = r.achievements >= min && r.achievements <= max
+          const inRank = selectedRanks.value.length === 0 || selectedRanks.value.includes(r.rate.toUpperCase().replace('P', '+'))
+          return inRange && inRank
+        })
+      } else {
+        const r = records[achDiffIndex.value]
+        if (!r) return false
+        const inRange = r.achievements >= min && r.achievements <= max
+        const inRank = selectedRanks.value.length === 0 || selectedRanks.value.includes(r.rate.toUpperCase().replace('P', '+'))
+        return inRange && inRank
+      }
+    })
+  }
+
+  // 6. Sort
+  result.sort((a, b) => {
+    let valA, valB
+    
+    if (sortBy.value === 'id') {
+      valA = Number(a.id)
+      valB = Number(b.id)
+    } else if (sortBy.value === 'ds') {
+      const getDs = (song) => dsDiffIndex.value === -1 ? Math.max(...song.ds) : (song.ds[dsDiffIndex.value] || 0)
+      valA = getDs(a)
+      valB = getDs(b)
+    } else if (sortBy.value === 'achievement') {
+      const getAch = (song) => {
+        const records = userRecordMap.value.get(Number(song.id))
+        if (!records) return -1
+        if (achDiffIndex.value === -1) {
+          const vals = Object.values(records).map(r => r.achievements)
+          return vals.length ? Math.max(...vals) : -1
+        }
+        return records[achDiffIndex.value]?.achievements || -1
+      }
+      valA = getAch(a)
+      valB = getAch(b)
+    } else {
+      return 0 // Default order (usually ID asc from source, or preserve)
+    }
+
+    if (valA === valB) return Number(b.id) - Number(a.id)
+    return sortDesc.value ? valB - valA : valA - valB
+  })
 
   return result
 })
@@ -104,7 +210,13 @@ watch([searchQuery, selectedCategory, selectedVersion], () => {
 })
 
 const getCoverUrl = (song) => {
-  return getServiceCoverUrl(song.id)
+  const url = getServiceCoverUrl(song.id)
+  return getCoverUrlWithFallback(url)
+}
+
+const handleImageError = (song) => {
+  const url = getServiceCoverUrl(song.id)
+  markAsFailed(url)
 }
 
 const selectSong = (song) => {
@@ -121,6 +233,21 @@ const selectSong = (song) => {
   emit('select', { ...song, record: bestRecord })
   emit('close')
 }
+
+// User Record Map for efficient lookup
+const userRecordMap = computed(() => {
+  const map = new Map()
+  if (!userStore.records) return map
+  
+  userStore.records.forEach(record => {
+    const id = Number(record.song_id)
+    if (!map.has(id)) {
+      map.set(id, {})
+    }
+    map.get(id)[record.level_index] = record
+  })
+  return map
+})
 </script>
 
 <template>
@@ -136,7 +263,7 @@ const selectSong = (song) => {
       </div>
 
       <!-- Search & Filter -->
-      <div class="p-3 md:p-4 border-b-2 border-black space-y-3 shrink-0 bg-gray-50">
+      <div class="p-3 md:p-4 border-b-2 border-black space-y-3 shrink-0 bg-gray-50 relative z-20">
         <div class="flex gap-2">
           <div class="relative flex-1">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" :size="20" />
@@ -144,65 +271,124 @@ const selectSong = (song) => {
               v-model="searchQuery"
               type="text" 
               class="input-base pl-10 py-2 w-full" 
-              placeholder="搜索歌曲名、作曲家或ID..." 
+              placeholder="搜索曲名、别名、曲师、谱师..." 
               autoFocus
             />
           </div>
           <button 
-            @click="showFilters = !showFilters"
+            @click="showAdvancedFilters = !showAdvancedFilters"
             class="btn-base px-3 flex items-center justify-center bg-white border-2 border-black rounded-lg"
-            :class="showFilters ? 'bg-gray-200' : ''"
+            :class="showAdvancedFilters ? 'bg-gray-200' : ''"
           >
-            <Filter :size="20" />
+            <SlidersHorizontal :size="20" />
           </button>
         </div>
 
-        <!-- Filters -->
-        <div v-if="showFilters" class="space-y-3 pt-2 border-t-2 border-black/10 border-dashed animate-in slide-in-from-top-2 duration-200">
-          <!-- Categories -->
-          <div class="space-y-1">
-            <div class="text-xs font-bold text-gray-500 ml-1">流派</div>
-            <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              <button 
-                v-for="cat in categories" 
-                :key="cat.id"
-                @click="selectedCategory = cat.id"
-                class="px-3 py-1 text-xs font-bold border-2 border-black rounded-full whitespace-nowrap transition-colors flex-shrink-0"
-                :class="selectedCategory === cat.id ? 'bg-pink-400 text-black' : 'bg-white hover:bg-gray-100'"
-              >
-                {{ cat.name }}
-              </button>
-            </div>
+        <!-- Sort Options -->
+        <div class="flex gap-2">
+           <div class="flex-1 bg-gray-200 p-1 rounded-lg flex">
+            <button 
+              v-for="opt in sortOptions" 
+              :key="opt.value"
+              @click="sortBy = opt.value"
+              :class="[
+                'flex-1 px-2 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap',
+                sortBy === opt.value 
+                  ? 'bg-white shadow-sm text-black ring-1 ring-black/5' 
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300/50'
+              ]"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <button 
+            @click="sortDesc = !sortDesc"
+            class="bg-gray-200 hover:bg-gray-300 border-2 border-transparent hover:border-gray-400 rounded-lg px-3 flex items-center justify-center transition-all"
+          >
+            <ArrowUpDown :size="18" :class="{ 'rotate-180': !sortDesc }" class="transition-transform text-gray-600" />
+          </button>
+        </div>
+
+        <!-- Advanced Filters Popover -->
+        <div v-if="showAdvancedFilters" class="absolute top-full right-0 mt-2 w-full md:w-[480px] bg-white rounded-xl shadow-xl border-2 border-black p-4 z-50 max-h-[60vh] overflow-y-auto">
+          <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+            <h3 class="font-bold text-lg flex items-center gap-2">
+              <SlidersHorizontal :size="20" />
+              高级筛选
+            </h3>
+            <button @click="showAdvancedFilters = false" class="p-1 hover:bg-gray-100 rounded-full transition-colors">
+              <X :size="20" class="text-gray-500" />
+            </button>
           </div>
 
-          <!-- Versions -->
-          <div class="space-y-1">
-            <div class="text-xs font-bold text-gray-500 ml-1">版本</div>
-            <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              <button 
-                v-for="ver in versions" 
-                :key="ver"
-                @click="selectedVersion = ver"
-                class="px-3 py-1 text-xs font-bold border-2 border-black rounded-full whitespace-nowrap transition-colors flex-shrink-0"
-                :class="selectedVersion === ver ? 'bg-blue-400 text-black' : 'bg-white hover:bg-gray-100'"
-              >
-                {{ ver === 'all' ? '全部版本' : ver }}
-              </button>
+          <div class="space-y-4">
+            <!-- Categories -->
+            <div class="space-y-1">
+              <div class="text-xs font-bold text-gray-500 ml-1">流派</div>
+              <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <button 
+                  v-for="cat in categories" 
+                  :key="cat.id"
+                  @click="selectedCategory = cat.id"
+                  class="px-3 py-1 text-xs font-bold border-2 border-black rounded-full whitespace-nowrap transition-colors flex-shrink-0"
+                  :class="selectedCategory === cat.id ? 'bg-pink-400 text-black' : 'bg-white hover:bg-gray-100'"
+                >
+                  {{ cat.name }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Versions -->
+            <div class="space-y-1">
+              <div class="text-xs font-bold text-gray-500 ml-1">版本</div>
+              <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <button 
+                  v-for="ver in versions" 
+                  :key="ver"
+                  @click="selectedVersion = ver"
+                  class="px-3 py-1 text-xs font-bold border-2 border-black rounded-full whitespace-nowrap transition-colors flex-shrink-0"
+                  :class="selectedVersion === ver ? 'bg-blue-400 text-black' : 'bg-white hover:bg-gray-100'"
+                >
+                  {{ ver === 'all' ? '全部版本' : getVersionName(ver) }}
+                </button>
+              </div>
+            </div>
+
+            <!-- DS Filter -->
+            <div class="space-y-2">
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">定数筛选</div>
+              <div class="flex gap-2">
+                <select v-model="dsDiffIndex" class="input-base w-24 text-sm px-2">
+                  <option :value="-1">任意难度</option>
+                  <option v-for="(label, idx) in diffLabels" :key="idx" :value="idx">{{ label }}</option>
+                </select>
+                <input v-model="minDs" type="number" placeholder="Min" class="input-base w-full text-sm" step="0.1" />
+                <span class="self-center font-bold text-gray-400">-</span>
+                <input v-model="maxDs" type="number" placeholder="Max" class="input-base w-full text-sm" step="0.1" />
+              </div>
+            </div>
+
+            <!-- Achievement Filter -->
+            <div v-if="userStore.isAuthenticated" class="space-y-2">
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">达成率筛选</div>
+              <div class="flex gap-2">
+                <select v-model="achDiffIndex" class="input-base w-24 text-sm px-2">
+                  <option :value="-1">任意难度</option>
+                  <option v-for="(label, idx) in diffLabels" :key="idx" :value="idx">{{ label }}</option>
+                </select>
+                <input v-model="minAch" type="number" placeholder="Min %" class="input-base w-full text-sm" step="0.1" />
+                <span class="self-center font-bold text-gray-400">-</span>
+                <input v-model="maxAch" type="number" placeholder="Max %" class="input-base w-full text-sm" step="0.1" />
+              </div>
+              <!-- Rank Checkboxes -->
+              <div class="flex flex-wrap gap-2 mt-2">
+                <label v-for="rank in rankOptions" :key="rank" class="flex items-center gap-1 cursor-pointer select-none bg-gray-50 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100">
+                  <input type="checkbox" :value="rank" v-model="selectedRanks" class="w-3 h-3 rounded border-gray-400 text-maimai-blue focus:ring-maimai-blue">
+                  <span class="text-xs font-bold text-gray-600">{{ rank }}</span>
+                </label>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <!-- Active Filters Summary (When collapsed) -->
-        <div v-else class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-           <button 
-              v-for="cat in categories" 
-              :key="cat.id"
-              @click="selectedCategory = cat.id"
-              class="px-3 py-1 text-xs font-bold border-2 border-black rounded-full whitespace-nowrap transition-colors flex-shrink-0"
-              :class="selectedCategory === cat.id ? 'bg-pink-400 text-black' : 'bg-white hover:bg-gray-100'"
-            >
-              {{ cat.name }}
-            </button>
         </div>
       </div>
 
@@ -223,6 +409,7 @@ const selectSong = (song) => {
           >
             <img 
               :src="getCoverUrl(song)" 
+              @error="handleImageError(song)"
               class="w-14 h-14 md:w-16 md:h-16 object-cover border-2 border-black rounded shrink-0"
               loading="lazy"
               referrerpolicy="no-referrer"
