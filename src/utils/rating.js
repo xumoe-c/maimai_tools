@@ -4,7 +4,7 @@ export const getRating = (record) => {
     // 1. Get DS
     let ds = record.ds
     let type = record.type
-    
+
     const song = getSongById(record.song_id)
     if (!ds || !type) {
         if (song) {
@@ -13,7 +13,7 @@ export const getRating = (record) => {
             if (!type && song.type) type = song.type
         }
     }
-    
+
     // Fallback if still missing
     if (!ds) ds = 0
     if (!type) type = 'DX'
@@ -34,7 +34,7 @@ export const getRating = (record) => {
     else coeff = 0 // Below A?
 
     const ra = Math.floor(ds * (ach / 100) * coeff)
-    
+
     // 3. Determine if it's a "New" song (Current Version)
     const version = song ? song.basic_info.from : ''
     const isNew = song && song.basic_info ? !!song.basic_info.is_new : false

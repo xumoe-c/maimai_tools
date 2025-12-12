@@ -20,7 +20,7 @@ const isMobileMenuOpen = ref(false)
     <!-- Sidebar (Desktop & Mobile Drawer) -->
     <aside 
       :class="[
-        'fixed inset-y-0 left-0 z-40 w-64 bg-white border-r-2 border-black transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0',
+        'fixed inset-y-0 left-0 z-40 w-64 bg-white border-r-2 border-black transform transition-transform duration-300 ease-in-out md:translate-x-0',
         isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
       ]"
     >
@@ -35,7 +35,7 @@ const isMobileMenuOpen = ref(false)
     ></div>
 
     <!-- Main Content -->
-    <main class="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto h-[calc(100vh-64px)] md:h-screen flex flex-col">
+    <main class="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto h-[calc(100vh-64px)] md:h-screen flex flex-col md:ml-64">
       <div class="flex-1">
         <RouterView />
       </div>

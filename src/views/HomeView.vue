@@ -1,5 +1,5 @@
 <script setup>
-import { Palette, Calculator, Shuffle, List, Trophy, X, ExternalLink, LogIn } from 'lucide-vue-next'
+import { Palette, Calculator, Shuffle, List, Trophy, X, ExternalLink, LogIn, MessageSquare } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
@@ -101,7 +101,18 @@ onMounted(() => {
             </p>
           </div>
         </RouterLink>
-
+        <!-- Tool Card: Random Selector -->
+        <RouterLink to="/random" class="group block">
+          <div class="h-full bg-maimai-pink border-2 border-black shadow-hard rounded-xl p-6 transition-transform group-hover:-translate-y-1 group-active:translate-y-1 group-active:shadow-none">
+            <div class="bg-white w-12 h-12 border-2 border-black rounded flex items-center justify-center mb-4 shadow-hard-sm">
+              <Shuffle :size="24" />
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2 drop-shadow-md">随机选曲</h3>
+            <p class="text-white font-medium opacity-90">
+              不知道打什么？来试试随机选曲吧！支持指定等级、分类和版本。
+            </p>
+          </div>
+        </RouterLink>
         <!-- Tool Card: B50 -->
         <RouterLink to="/b50" class="group block">
           <div class="h-full bg-maimai-yellow border-2 border-black shadow-hard rounded-xl p-6 transition-transform group-hover:-translate-y-1 group-active:translate-y-1 group-active:shadow-none">
@@ -111,6 +122,32 @@ onMounted(() => {
             <h3 class="text-xl font-bold text-white mb-2 drop-shadow-md">B50 查询</h3>
             <p class="text-white font-medium opacity-90">
               查询你的 B50 成绩构成与 Rating 计算详情。
+            </p>
+          </div>
+        </RouterLink>
+
+        <!-- Tool Card: Fitting B50 -->
+        <RouterLink to="/fitting-b50" class="group block">
+          <div class="h-full bg-maimai-pink border-2 border-black shadow-hard rounded-xl p-6 transition-transform group-hover:-translate-y-1 group-active:translate-y-1 group-active:shadow-none">
+            <div class="bg-white w-12 h-12 border-2 border-black rounded flex items-center justify-center mb-4 shadow-hard-sm">
+              <Trophy :size="24" />
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2 drop-shadow-md">拟合 B50</h3>
+            <p class="text-white font-medium opacity-90">
+              基于拟合定数计算 B50，查看你的潜在实力。
+            </p>
+          </div>
+        </RouterLink>
+
+        <!-- Tool Card: Review -->
+        <RouterLink to="/review" class="group block">
+          <div class="h-full bg-purple-500 border-2 border-black shadow-hard rounded-xl p-6 transition-transform group-hover:-translate-y-1 group-active:translate-y-1 group-active:shadow-none">
+            <div class="bg-white w-12 h-12 border-2 border-black rounded flex items-center justify-center mb-4 shadow-hard-sm">
+              <MessageSquare :size="24" />
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2 drop-shadow-md">一句话评价</h3>
+            <p class="text-white font-medium opacity-90">
+              记录你对谱面的评价，生成精美图片分享。
             </p>
           </div>
         </RouterLink>
@@ -127,19 +164,6 @@ onMounted(() => {
             </p>
           </div>
         </RouterLink>
-
-        <!-- Tool Card: Random (Coming Soon) -->
-        <div class="opacity-60 cursor-not-allowed">
-          <div class="h-full bg-maimai-yellow border-2 border-black shadow-hard rounded-xl p-6">
-            <div class="bg-white w-12 h-12 border-2 border-black rounded flex items-center justify-center mb-4 shadow-hard-sm">
-              <Shuffle :size="24" />
-            </div>
-            <h3 class="text-xl font-bold text-black mb-2">随机选曲</h3>
-            <p class="text-black font-medium opacity-90">
-              (开发中) 治好选择困难症，支持按等级、版本随机。
-            </p>
-          </div>
-        </div>
 
       </div>
     </div>

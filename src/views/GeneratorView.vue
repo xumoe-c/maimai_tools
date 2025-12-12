@@ -1,27 +1,19 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { usePreferenceStore } from '@/stores/preference'
 import { fetchMusicData } from '@/services/diving-fish'
 import PreferenceCanvas from '@/components/generator/PreferenceCanvas.vue'
 import SongSelector from '@/components/generator/SongSelector.vue'
-import { ChevronDown, ChevronUp } from 'lucide-vue-next'
+import PreferenceArchiveManager from '@/components/generator/PreferenceArchiveManager.vue'
+import { ChevronDown, ChevronUp, FolderOpen } from 'lucide-vue-next'
 
 const userStore = useUserStore()
+const prefStore = usePreferenceStore()
 const musicData = ref([])
 
-// Local config state
-const storedConfig = localStorage.getItem('generator_config')
-const config = ref(storedConfig ? JSON.parse(storedConfig) : {
-  theme: 'default',
-  title: 'Maimai歌曲喜好表'
-})
-
-// Persist config
-watch(config, (newVal) => {
-  localStorage.setItem('generator_config', JSON.stringify(newVal))
-}, { deep: true })
-
 const isConfigOpen = ref(false)
+const showArchiveManager = ref(false)
 
 // Accordion State
 const activeAccordion = ref('basic') // 'basic', 'theme', 'labels' or null
@@ -41,25 +33,16 @@ const themes = [
   { id: 'blue', name: '清爽蓝' },
 ]
 
+// Computed bindings for form inputs to trigger store updates
+const configTitle = computed({
+    get: () => prefStore.config.title,
+    set: (val) => prefStore.updateConfig({ title: val })
+})
 
-// Grid State
-const defaultLabels = [
-  '入坑曲', '最喜欢', '最近练习',
-  '最强', '最弱', '初鸟 (AP)',
-  '初FC', '想要AP', '想要FC',
-  '听不腻', '推荐曲', '随便填'
-]
-
-const storedCells = localStorage.getItem('generator_cells')
-const cells = ref(storedCells ? JSON.parse(storedCells) : defaultLabels.map(label => ({
-  label,
-  song: null
-})))
-
-// Persist cells
-watch(cells, (newVal) => {
-  localStorage.setItem('generator_cells', JSON.stringify(newVal))
-}, { deep: true })
+const configTheme = computed({
+    get: () => prefStore.config.theme,
+    set: (val) => prefStore.updateConfig({ theme: val })
+})
 
 // Selector State
 const showSelector = ref(false)
@@ -72,10 +55,14 @@ const handleCellClick = (index) => {
 
 const handleSongSelect = (song) => {
   if (currentCellIndex.value !== -1) {
-    cells.value[currentCellIndex.value].song = song
+    prefStore.updateCell(currentCellIndex.value, song)
   }
   showSelector.value = false
   currentCellIndex.value = -1
+}
+
+const handleLabelChange = (index, value) => {
+    prefStore.updateCellLabel(index, value)
 }
 
 // Load token on mount
@@ -97,7 +84,16 @@ onMounted(async () => {
 <template>
   <div class="h-[calc(100vh-80px)] flex flex-col gap-4 lg:gap-6">
     <div class="flex items-center justify-between flex-shrink-0">
-      <h1 class="text-xl lg:text-2xl font-black">生涯歌曲喜好表生成器</h1>
+      <div class="flex items-center gap-4">
+        <h1 class="text-xl lg:text-2xl font-black">生涯歌曲喜好表生成器</h1>
+        <button 
+            @click="showArchiveManager = true"
+            class="flex items-center gap-2 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-bold text-gray-700 transition-colors border border-gray-300"
+        >
+            <FolderOpen :size="16" />
+            {{ prefStore.currentArchive?.name || '默认存档' }}
+        </button>
+      </div>
       <div class="text-xs lg:text-sm font-bold bg-maimai-yellow px-2 lg:px-3 py-1 border-2 border-black rounded shadow-hard-sm">
         Beta
       </div>
@@ -154,11 +150,11 @@ onMounted(async () => {
             <div v-show="activeAccordion === 'theme'" class="p-4 border-t-2 border-black space-y-3 bg-white">
               <div>
                 <label class="block font-bold text-sm mb-1">表格标题</label>
-                <input v-model="config.title" type="text" class="input-base" placeholder="Maimai歌曲喜好表" />
+                <input v-model="configTitle" type="text" class="input-base" placeholder="Maimai歌曲喜好表" />
               </div>
               <div>
                 <label class="block font-bold text-sm mb-1">主题风格</label>
-                <select v-model="config.theme" class="input-base">
+                <select v-model="configTheme" class="input-base">
                   <option v-for="theme in themes" :key="theme.id" :value="theme.id">
                     {{ theme.name }}
                   </option>
@@ -182,9 +178,10 @@ onMounted(async () => {
             </button>
             <div v-show="activeAccordion === 'labels'" class="p-4 border-t-2 border-black space-y-3 bg-white">
               <div class="grid grid-cols-2 gap-2">
-                <div v-for="(cell, idx) in cells" :key="idx">
+                <div v-for="(cell, idx) in prefStore.cells" :key="idx">
                   <input 
-                    v-model="cell.label" 
+                    :value="cell.label"
+                    @input="e => handleLabelChange(idx, e.target.value)"
                     type="text" 
                     class="input-base text-xs py-1 px-2" 
                   />
@@ -206,8 +203,8 @@ onMounted(async () => {
           <!-- Canvas Wrapper -->
           <div class="my-auto p-4 lg:p-8 origin-top lg:origin-center transform scale-[0.4] xs:scale-[0.45] sm:scale-[0.6] md:scale-[0.7] lg:scale-[0.8] xl:scale-[0.9] 2xl:scale-100 transition-transform">
             <PreferenceCanvas 
-              :config="config" 
-              :cells="cells" 
+              :config="prefStore.config" 
+              :cells="prefStore.cells" 
               @cell-click="handleCellClick" 
             />
           </div>
@@ -222,6 +219,11 @@ onMounted(async () => {
       :musicData="musicData"
       @select="handleSongSelect" 
       @close="showSelector = false" 
+    />
+
+    <PreferenceArchiveManager 
+        :is-open="showArchiveManager"
+        @close="showArchiveManager = false"
     />
   </div>
 </template>

@@ -10,6 +10,11 @@ const router = createRouter({
             component: HomeView
         },
         {
+            path: '/random',
+            name: 'random',
+            component: () => import('../views/RandomView.vue')
+        },
+        {
             path: '/generator/preference-table',
             name: 'preference-table',
             component: () => import('../views/GeneratorView.vue')
@@ -48,6 +53,16 @@ const router = createRouter({
             path: '/recommendation',
             name: 'recommendation',
             component: () => import('../views/RecommendationView.vue')
+        },
+        {
+            path: '/fitting-b50',
+            name: 'fitting-b50',
+            component: () => import('../views/FittingB50View.vue')
+        },
+        {
+            path: '/review',
+            name: 'review',
+            component: () => import('../views/ReviewView.vue')
         }
     ]
 })

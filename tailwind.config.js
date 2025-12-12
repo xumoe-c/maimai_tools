@@ -12,6 +12,7 @@ export default {
                 'maimai-yellow': '#FACC15',
                 'maimai-green': '#4ADE80',
                 'maimai-red': '#F87171',
+                'maimai-pink': '#F472B6',
             },
             boxShadow: {
                 'hard': '4px 4px 0px 0px #000000',
