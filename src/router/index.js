@@ -38,6 +38,16 @@ const router = createRouter({
             path: '/song/:id',
             name: 'song-detail',
             component: () => import('../views/SongDetailView.vue')
+        },
+        {
+            path: '/versions',
+            name: 'versions',
+            component: () => import('../views/VersionTableView.vue')
+        },
+        {
+            path: '/recommendation',
+            name: 'recommendation',
+            component: () => import('../views/RecommendationView.vue')
         }
     ]
 })

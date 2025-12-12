@@ -83,62 +83,56 @@ const handleImageError = (e) => {
 </script>
 
 <template>
-  <div class="relative rounded-lg overflow-hidden shadow-sm border border-white/20 flex flex-col select-none h-full">
+  <div class="relative bg-white border-2 border-black flex flex-col select-none h-full shadow-[4px_4px_0px_0px_#000000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000000] transition-all">
     
-    <!-- Background Layer -->
-    <div class="absolute inset-0 z-0 overflow-hidden">
-        <img :src="coverUrl" @error="handleImageError" class="w-full h-full object-cover blur-xl scale-150 opacity-40" />
-        <div class="absolute inset-0 bg-white/80 backdrop-blur-md"></div>
-    </div>
-
     <!-- Content Layer -->
     <div class="relative z-10 flex flex-col h-full">
         <!-- Top Section: Cover & Type -->
-        <div class="relative aspect-[1.7/1] overflow-hidden shadow-sm">
+        <div class="relative aspect-[1.7/1] overflow-hidden border-b-2 border-black">
             <img :src="coverUrl" @error="handleImageError" class="w-full h-full object-cover" />
             
             <!-- Type Badge -->
-            <div :class="[typeColor, 'absolute top-0 right-0 px-1.5 py-0.5 text-[10px] font-black text-white rounded-bl-lg shadow-sm']">
+            <div :class="[typeColor, 'absolute top-0 right-0 px-1.5 py-0.5 text-[10px] font-black text-white border-l-2 border-b-2 border-black']">
                 {{ record.type }}
             </div>
 
             <!-- Rank Number Badge -->
-            <div v-if="rank > 0" class="absolute top-0 left-0 bg-black/60 text-white px-1.5 py-0.5 text-[10px] font-bold rounded-br-lg backdrop-blur-sm border-b border-r border-white/10">
+            <div v-if="rank > 0" class="absolute top-0 left-0 bg-black text-white px-1.5 py-0.5 text-[10px] font-bold border-r-2 border-b-2 border-white">
                 #{{ rank }}
             </div>
 
             <!-- Level & Rating (Bottom Left) -->
             <div class="absolute bottom-0 left-0 flex items-stretch">
                 <!-- Level Block -->
-                <div :class="[difficultyColor, 'relative z-10 px-2 py-0.5 text-white text-xs font-black rounded-tr-lg shadow-sm flex items-center justify-center min-w-[2rem]']">
+                <div :class="[difficultyColor, 'relative z-10 px-2 py-0.5 text-white text-xs font-black border-t-2 border-r-2 border-black flex items-center justify-center min-w-[2rem]']">
                     {{ record.level }}
                 </div>
                 <!-- Rating Block -->
-                <div class="bg-black/80 text-white px-2 py-0.5 text-xs font-bold rounded-tr-lg ml-[-4px] pl-3 flex items-center shadow-sm backdrop-blur-sm border-t border-r border-white/10">
+                <div class="bg-black text-white px-2 py-0.5 text-xs font-bold border-t-2 border-r-2 border-white ml-[-2px] pl-3 flex items-center">
                     {{ record.ra }}
                 </div>
             </div>
         </div>
 
         <!-- Info Section -->
-        <div class="p-1.5 flex flex-col gap-0.5 flex-1 justify-between bg-white/80 backdrop-blur-sm">
+        <div class="p-2 flex flex-col gap-1 flex-1 justify-between bg-white">
             <!-- Title -->
-            <div class="text-[10px] font-bold leading-tight line-clamp-1 text-gray-900" :title="record.title">
+            <div class="text-[10px] font-bold leading-tight line-clamp-1 text-black" :title="record.title">
                 {{ record.title }}
             </div>
 
             <!-- Achievement & Icons -->
             <div class="flex items-end justify-between mt-1">
                 <!-- Achievement (Left) -->
-                <span :class="[rateColor, 'text-lg font-black italic tracking-tighter']" style="text-shadow: 1px 1px 0px white, -1px -1px 0px white, 1px -1px 0px white, -1px 1px 0px white, 0px 2px 4px rgba(0,0,0,0.2);">
+                <span :class="[rateColor, 'text-sm md:text-lg font-black italic tracking-tighter']">
                     {{ achievement }}
                 </span>
 
                 <!-- Icons (Right) -->
-                <div class="flex items-center gap-0.5 h-5">
-                    <img :src="rankIconUrl" class="h-full object-contain drop-shadow-sm" />
-                    <img v-if="fcIconUrl" :src="fcIconUrl" class="h-full object-contain drop-shadow-sm" />
-                    <img v-if="fsIconUrl" :src="fsIconUrl" class="h-full object-contain drop-shadow-sm" />
+                <div class="flex items-center gap-0.5 h-4 md:h-5">
+                    <img :src="rankIconUrl" class="h-full object-contain" />
+                    <img v-if="fcIconUrl" :src="fcIconUrl" class="h-full object-contain" />
+                    <img v-if="fsIconUrl" :src="fsIconUrl" class="h-full object-contain" />
                 </div>
             </div>
         </div>

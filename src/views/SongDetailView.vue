@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getSongById, getCoverUrl, fetchMusicData, fetchSongAliases, fetchChartStats } from '@/services/diving-fish'
-import { Loader2, ArrowLeft, Music, User, Activity, BarChart2, Info, List } from 'lucide-vue-next'
+import { Loader2, ArrowLeft, Music, User, Activity, BarChart2, Info, List, Copy, Search } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +16,11 @@ const chartStats = ref(null)
 const isLoading = ref(true)
 const showAliasModal = ref(false)
 const selectedDiffIndex = ref(0)
+
+// Context Menu State
+const showMenu = ref(false)
+const menuPosition = ref({ x: 0, y: 0 })
+let longPressTimer = null
 
 // Difficulty colors and labels
 const diffColors = ['bg-maimai-green', 'bg-maimai-yellow', 'bg-maimai-red', 'bg-maimai-purple', 'bg-pink-300']
@@ -37,6 +42,80 @@ const userRecords = computed(() => {
     })
     return records
 })
+
+const handleLongPressStart = (e) => {
+    longPressTimer = setTimeout(() => {
+        const touch = e.touches ? e.touches[0] : e
+        // Adjust position to not be off-screen
+        const x = Math.min(touch.clientX, window.innerWidth - 180)
+        const y = Math.min(touch.clientY, window.innerHeight - 150)
+        
+        menuPosition.value = { x, y }
+        showMenu.value = true
+        
+        // Vibrate if supported
+        if (navigator.vibrate) {
+            navigator.vibrate(50)
+        }
+    }, 500)
+}
+
+const handleLongPressEnd = () => {
+    if (longPressTimer) {
+        clearTimeout(longPressTimer)
+        longPressTimer = null
+    }
+}
+
+const copyTitle = async () => {
+    try {
+        await navigator.clipboard.writeText(song.value.title)
+        showMenu.value = false
+    } catch (err) {
+        console.error('Failed to copy:', err)
+    }
+}
+
+const searchBilibili = () => {
+    const keyword = encodeURIComponent(song.value.title)
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    
+    if (isMobile) {
+        // 尝试唤起 Bilibili App
+        const start = Date.now()
+        window.location.href = `bilibili://search?keyword=${keyword}`
+        
+        // 唤起失败时的 Fallback (2秒后如果还在当前页面则跳转网页版)
+        setTimeout(() => {
+            if (Date.now() - start < 2500 && !document.hidden) {
+                window.open(`https://m.bilibili.com/search?keyword=${keyword}`, '_blank')
+            }
+        }, 2000)
+    } else {
+        window.open(`https://search.bilibili.com/all?keyword=${keyword}`, '_blank')
+    }
+    showMenu.value = false
+}
+
+const searchNetease = () => {
+    const keyword = encodeURIComponent(song.value.title)
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
+    if (isMobile) {
+        // 尝试唤起网易云音乐 App
+        const start = Date.now()
+        window.location.href = `orpheus://search?keyword=${keyword}`
+        
+        setTimeout(() => {
+            if (Date.now() - start < 2500 && !document.hidden) {
+                window.open(`https://music.163.com/#/search/m/?s=${keyword}&type=1`, '_blank')
+            }
+        }, 2000)
+    } else {
+        window.open(`https://music.163.com/#/search/m/?s=${keyword}&type=1`, '_blank')
+    }
+    showMenu.value = false
+}
 
 const loadData = async () => {
     isLoading.value = true
@@ -129,9 +208,11 @@ onMounted(() => {
             <div class="bg-white border-2 border-black shadow-hard rounded-xl overflow-hidden">
                 <div class="flex flex-col md:flex-row">
                     <!-- Cover -->
-                    <div class="w-full md:w-64 aspect-square shrink-0 border-b-2 md:border-b-0 md:border-r-2 border-black relative group">
-                        <img :src="getCoverUrl(songId)" @error="handleImageError" class="w-full h-full object-cover" />
-                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                    <div class="w-full md:w-64 shrink-0 border-b-2 md:border-b-0 md:border-r-2 border-black relative group flex justify-center items-center md:block bg-gray-50 md:bg-transparent py-6 md:py-0">
+                        <div class="w-48 md:w-full aspect-square relative shadow-hard md:shadow-none border-2 md:border-0 border-black">
+                            <img :src="getCoverUrl(songId)" @error="handleImageError" class="w-full h-full object-cover" />
+                            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                        </div>
                     </div>
                     
                     <!-- Info -->
@@ -142,7 +223,18 @@ onMounted(() => {
                                     <span class="inline-block px-2 py-0.5 text-xs font-black border border-black rounded bg-gray-100 mb-2">
                                         {{ song.basic_info.genre }}
                                     </span>
-                                    <h1 class="text-2xl md:text-4xl font-black leading-tight mb-1">{{ song.title }}</h1>
+                                    <h1 
+                                        class="text-2xl md:text-4xl font-black leading-tight mb-1 select-none cursor-pointer active:opacity-70 transition-opacity"
+                                        @touchstart="handleLongPressStart"
+                                        @touchend="handleLongPressEnd"
+                                        @touchmove="handleLongPressEnd"
+                                        @mousedown="handleLongPressStart"
+                                        @mouseup="handleLongPressEnd"
+                                        @mouseleave="handleLongPressEnd"
+                                        @contextmenu.prevent
+                                    >
+                                        {{ song.title }}
+                                    </h1>
                                     <p class="text-gray-600 font-bold flex items-center gap-2">
                                         <User :size="16" />
                                         {{ song.basic_info.artist }}
@@ -330,5 +422,30 @@ onMounted(() => {
                 <button @click="showAliasModal = false" class="mt-6 w-full btn-base bg-black text-white py-2">关闭</button>
             </div>
         </div>
+
+        <!-- Context Menu -->
+        <div 
+            v-if="showMenu" 
+            class="fixed z-50 bg-white border-2 border-black shadow-hard rounded-lg overflow-hidden min-w-[160px] animate-in fade-in zoom-in duration-200 origin-top-left"
+            :style="{ top: `${menuPosition.y}px`, left: `${menuPosition.x}px` }"
+        >
+            <div class="flex flex-col">
+                <button @click="copyTitle" class="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 text-sm font-bold text-left border-b border-gray-100 transition-colors">
+                    <Copy :size="16" />
+                    复制标题
+                </button>
+                <button @click="searchBilibili" class="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 text-sm font-bold text-left border-b border-gray-100 transition-colors">
+                    <Search :size="16" />
+                    B站搜索
+                </button>
+                <button @click="searchNetease" class="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 text-sm font-bold text-left transition-colors">
+                    <Music :size="16" />
+                    网易云搜索
+                </button>
+            </div>
+        </div>
+
+        <!-- Backdrop to close menu -->
+        <div v-if="showMenu" class="fixed inset-0 z-40" @click="showMenu = false" @touchstart="showMenu = false"></div>
     </div>
 </template>

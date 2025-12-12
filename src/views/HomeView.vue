@@ -8,7 +8,7 @@ const userStore = useUserStore()
 const showLoginModal = ref(false)
 
 onMounted(() => {
-  if (!userStore.isAuthenticated) {
+  if (!userStore.isAuthenticated && userStore.records.length === 0) {
     showLoginModal.value = true
   }
 })
@@ -111,6 +111,19 @@ onMounted(() => {
             <h3 class="text-xl font-bold text-white mb-2 drop-shadow-md">B50 查询</h3>
             <p class="text-white font-medium opacity-90">
               查询你的 B50 成绩构成与 Rating 计算详情。
+            </p>
+          </div>
+        </RouterLink>
+
+        <!-- Tool Card: Version Table -->
+        <RouterLink to="/versions" class="group block">
+          <div class="h-full bg-maimai-green border-2 border-black shadow-hard rounded-xl p-6 transition-transform group-hover:-translate-y-1 group-active:translate-y-1 group-active:shadow-none">
+            <div class="bg-white w-12 h-12 border-2 border-black rounded flex items-center justify-center mb-4 shadow-hard-sm">
+              <List :size="24" />
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2 drop-shadow-md">版本对照表</h3>
+            <p class="text-white font-medium opacity-90">
+              查看舞萌DX各版本名称对照及 B50 计算分类规则。
             </p>
           </div>
         </RouterLink>

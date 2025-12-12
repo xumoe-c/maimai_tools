@@ -3,11 +3,12 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import MusicCard from '@/components/music/MusicCard.vue'
 import { Loader2, Search, Filter, ArrowUpDown, Music, SlidersHorizontal, X } from 'lucide-vue-next'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { fetchMusicData, fetchAllAliases } from '@/services/diving-fish'
 import { getVersionName } from '@/utils/version-map'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const musicData = ref([])
@@ -205,6 +206,11 @@ onMounted(async () => {
 
     // Load aliases
     aliasMap.value = await fetchAllAliases()
+
+    // Handle query params
+    if (route.query.version) {
+      filterVersion.value = route.query.version
+    }
   } catch (e) {
     console.error("Failed to load metadata", e)
   } finally {
