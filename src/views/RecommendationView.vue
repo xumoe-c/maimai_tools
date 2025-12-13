@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useRecommendationStore } from '@/stores/recommendation'
-import { ArrowLeft, Loader2, Sparkles, Target, Zap, Coffee } from 'lucide-vue-next'
+import { ArrowLeft, Loader2, Target, Zap, Coffee, RefreshCw } from 'lucide-vue-next'
 import { getRating, calculateRating } from '@/utils/rating'
 import { fetchMusicData, getSongById, getCoverUrl } from '@/services/diving-fish'
 import RecommendationCard from '@/components/recommendation/RecommendationCard.vue'
@@ -18,9 +18,11 @@ const musicData = ref([])
 
 // Data Lists
 const scoreAttackList = ref([])
-const newGemList = ref([])
 const oldGemList = ref([])
 const easyList = ref([])
+
+// For Old Gem Shuffle
+const allOldGemCandidates = ref([])
 
 onMounted(async () => {
     isProcessing.value = true
@@ -80,7 +82,13 @@ const processRecommendations = () => {
             // Use fit_diff if available, else ds
             const fitDiff = recStore.getFitDiff(record.song_id, record.level_index) || record.ds
             const targetRating = calculateRating(fitDiff, targetAch)
-            const gain = targetRating - record.ra
+            
+            // Calculate gain based on B50 bottom (floor)
+            // If record is in B50 (ra >= floor), gain is targetRating - record.ra
+            // If record is NOT in B50 (ra < floor), gain is targetRating - floor (it replaces the floor)
+            const floor = record.isNew ? b15Min : b35Min
+            const baseline = record.ra >= floor ? record.ra : floor
+            const gain = targetRating - baseline
             
             if (gain > 0) {
                 const song = getSongById(record.song_id)
@@ -105,18 +113,32 @@ const processRecommendations = () => {
     })
     scoreAttackList.value = attackCandidates.sort((a, b) => b.gain - a.gain).slice(0, 50)
 
-    // 3. Strategy B: Gems (New & Old)
-    const newGemCandidates = []
+    // 3. Strategy B: Gems (Old)
     const oldGemCandidates = []
     const easyCandidates = []
 
-    // Create a set of played chart keys "songId_levelIndex"
+    // Create a Set of played charts for fast lookup
     const playedCharts = new Set(processedRecords.map(r => `${r.song_id}_${r.level_index}`))
 
+    // Use B50 Avg DS as the player's capability baseline (fits B50 progress)
+    const allB50 = [...b15, ...b35]
+    const b50AvgDS = allB50.length ? allB50.reduce((acc, r) => acc + r.ds, 0) / allB50.length : 10.0
+    
+    // Calculate recommended range based on B50View logic (Center +/- 0.6)
+    const centerDS = Math.round(b50AvgDS * 10) / 10
+    const recMinDS = parseFloat((centerDS - 0.6).toFixed(1))
+    const recMaxDS = parseFloat((centerDS + 0.6).toFixed(1))
+
+    // Easy Range: [Center - 1.5, Center - 0.5] (Previous rising phase)
+    const easyMinDS = parseFloat(Math.max(1.0, centerDS - 1.5).toFixed(1))
+    const easyMaxDS = parseFloat(Math.max(1.0, centerDS - 0.5).toFixed(1))
+
     musicData.value.forEach(song => {
-        const isNew = song.basic_info.is_new
+        // Safety check for basic_info
+        if (!song.basic_info) return
+
+        const isNew = !!song.basic_info.is_new
         const targetMin = isNew ? b15Min : b35Min
-        const targetAvgDS = isNew ? b15AvgDS : b35AvgDS
 
         song.ds.forEach((ds, levelIndex) => {
             // Skip if played (for Gems)
@@ -136,32 +158,37 @@ const processRecommendations = () => {
 
             // --- Strategy B: Gems ---
             if (!isPlayed && avgAch) {
-                // Filter by DS range (e.g., AvgDS - 1.5 to AvgDS + 2.0)
-                if (fitDiff >= targetAvgDS - 1.5 && fitDiff <= targetAvgDS + 2.5) {
-                    // Predict rating based on global avg (conservative estimate: avg - 1%?)
-                    // Let's just use avg for now, or maybe avg of people around this rating?
-                    // Simple approach: Use global avg achievement to calculate predicted rating
-                    const predictedRating = calculateRating(fitDiff, avgAch)
-                    const gain = predictedRating - targetMin
+                // 1. Actual DS Range: [Center - 0.6, Center + 0.6]
+                // Matches the "Music Constant Recommendation" range in B50 module
+                if (ds >= recMinDS && ds <= recMaxDS) {
+                    
+                    // 2. Criteria: Underrated (Fit < Actual) OR High Avg Score (SS+)
+                    const isUnderrated = fitDiff < ds // Fit diff is lower than actual DS
+                    const isHighAvg = avgAch >= 99.0 // Community avg is SS or higher
 
-                    if (gain > 0) {
-                        const candidate = {
-                            song,
-                            stats,
-                            predictedRating,
-                            gain,
-                            strategy: 'gem'
+                    if (isUnderrated || isHighAvg) {
+                        const predictedRating = calculateRating(fitDiff, avgAch)
+                        const gain = predictedRating - targetMin
+
+                        if (gain > 0) {
+                            const candidate = {
+                                song,
+                                stats,
+                                predictedRating,
+                                gain,
+                                strategy: 'gem'
+                            }
+                            oldGemCandidates.push(candidate)
                         }
-                        if (isNew) newGemCandidates.push(candidate)
-                        else oldGemCandidates.push(candidate)
                     }
                 }
             }
 
             // --- Strategy C: Easy ---
-            // High avg achievement, regardless of played or not (but usually unplayed is more interesting)
-            // Filter: Avg >= 99.0 and DS is reasonable (not too easy, not too hard)
-            if (avgAch && avgAch >= 98.5 && fitDiff >= 10.0 && fitDiff <= maxDS + 1.0) {
+            // User Request: "Comfortable" charts (Previous rising phase constants)
+            // Range: [easyMinDS, easyMaxDS]
+            // Filter: Not a mine (Fit <= DS + 0.2), Decent Avg (>= 98.0)
+            if (avgAch && ds >= easyMinDS && ds <= easyMaxDS && fitDiff <= ds + 0.2 && avgAch >= 98.0 && parseInt(song.id) < 100000) {
                  // If played, check if we can still improve? 
                  // For simplicity, let's list high avg songs that we haven't SSS+ yet
                  let currentAch = 0
@@ -185,15 +212,27 @@ const processRecommendations = () => {
         })
     })
 
-    newGemList.value = newGemCandidates.sort((a, b) => b.gain - a.gain).slice(0, 50)
-    oldGemList.value = oldGemCandidates.sort((a, b) => b.gain - a.gain).slice(0, 50)
+    // Store all candidates for shuffling
+    allOldGemCandidates.value = oldGemCandidates.sort((a, b) => b.gain - a.gain)
+    shuffleOldGems()
+    
     easyList.value = easyCandidates.sort((a, b) => b.stats.avg - a.stats.avg).slice(0, 50)
+}
+
+const shuffleOldGems = () => {
+    if (allOldGemCandidates.value.length === 0) {
+        oldGemList.value = []
+        return
+    }
+    // Shuffle array
+    const shuffled = [...allOldGemCandidates.value].sort(() => 0.5 - Math.random())
+    // Take top 20
+    oldGemList.value = shuffled.slice(0, 20).sort((a, b) => b.gain - a.gain)
 }
 
 const currentList = computed(() => {
     switch (activeTab.value) {
         case 'score-attack': return scoreAttackList.value
-        case 'new-gem': return newGemList.value
         case 'old-gem': return oldGemList.value
         case 'easy': return easyList.value
         default: return []
@@ -202,7 +241,6 @@ const currentList = computed(() => {
 
 const tabs = [
     { id: 'score-attack', label: '临门一脚', icon: Target, color: 'text-red-500' },
-    { id: 'new-gem', label: '新曲挖掘', icon: Sparkles, color: 'text-yellow-500' },
     { id: 'old-gem', label: '旧曲挖掘', icon: Zap, color: 'text-blue-500' },
     { id: 'easy', label: '甜品推荐', icon: Coffee, color: 'text-green-500' }
 ]
@@ -233,7 +271,7 @@ const tabs = [
 
         <div v-else class="space-y-6">
             <!-- Tabs -->
-            <div class="flex overflow-x-auto gap-3 pb-4 no-scrollbar">
+            <div class="flex overflow-x-auto gap-3 pt-2 pb-4 px-1 no-scrollbar">
                 <button 
                     v-for="tab in tabs" 
                     :key="tab.id"
@@ -250,6 +288,17 @@ const tabs = [
 
             <!-- Content Area -->
             <div class="bg-white border-2 border-black p-4 md:p-6 shadow-[8px_8px_0px_0px_#000000] min-h-[400px]">
+                <!-- Toolbar for Old Gem -->
+                <div v-if="activeTab === 'old-gem'" class="flex justify-end mb-4">
+                    <button 
+                        @click="shuffleOldGems"
+                        class="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 font-bold border-2 border-blue-200 hover:border-blue-500 hover:bg-blue-100 transition-colors"
+                    >
+                        <RefreshCw :size="16" />
+                        换一批
+                    </button>
+                </div>
+
                 <div v-if="currentList.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <RecommendationCard 
                         v-for="(item, index) in currentList"
@@ -261,6 +310,7 @@ const tabs = [
                         :target-rating="item.targetRating"
                         :target-ach="item.targetAch"
                         :predicted-rating="item.predictedRating"
+                        :gain="item.gain"
                         :cover-url="getCoverUrl(item.song.id)"
                         @click="router.push(`/song/${item.song.id}`)"
                         class="cursor-pointer"

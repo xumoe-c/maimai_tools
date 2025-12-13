@@ -10,6 +10,7 @@ const props = defineProps({
     targetRating: { type: Number, default: 0 },
     targetAch: { type: Number, default: 0 },
     predictedRating: { type: Number, default: 0 },
+    gain: { type: Number, default: 0 },
     coverUrl: { type: String, default: '' }
 })
 
@@ -103,13 +104,15 @@ const formatAch = (ach) => ach.toFixed(4) + '%'
 
         <!-- Rating Gain -->
         <div class="flex flex-col items-end justify-center min-w-[60px] md:min-w-[80px] pl-2 border-l-2 border-gray-100">
-            <div class="flex items-center gap-1 text-maimai-blue font-black text-lg md:text-xl leading-none">
-                <TrendingUp :size="16" stroke-width="3" />
-                <span>+{{ (strategy === 'attack' ? (targetRating - userRecord.ra) : predictedRating).toFixed(0) }}</span>
-            </div>
-            <div class="text-[8px] md:text-[10px] text-gray-400 font-bold mt-1 text-right leading-tight">
-                RATING UP
-            </div>
+            <template v-if="strategy !== 'easy'">
+                <div class="flex items-center gap-1 text-maimai-blue font-black text-lg md:text-xl leading-none">
+                    <TrendingUp :size="16" stroke-width="3" />
+                    <span>+{{ gain.toFixed(0) }}</span>
+                </div>
+                <div class="text-[8px] md:text-[10px] text-gray-400 font-bold mt-1 text-right leading-tight">
+                    RATING UP
+                </div>
+            </template>
             <div v-if="stats.fit_diff" class="text-[8px] md:text-[10px] text-gray-400 font-bold text-right leading-tight">
                 Fit: {{ stats.fit_diff.toFixed(2) }}
             </div>

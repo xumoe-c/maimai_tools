@@ -299,7 +299,7 @@ watch([searchQuery, filterGenre, filterVersion], () => {
           </div>
 
           <!-- Floating Advanced Filters Window -->
-          <div v-if="showAdvancedFilters" class="absolute top-full right-0 mt-2 w-full md:w-[480px] bg-white rounded-xl shadow-xl border-2 border-gray-100 p-4 z-50">
+          <div v-if="showAdvancedFilters" class="absolute top-full right-0 mt-2 w-full md:w-[480px] bg-white rounded-xl shadow-xl border-2 border-gray-100 p-4 z-20">
             <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
               <h3 class="font-bold text-lg flex items-center gap-2">
                 <SlidersHorizontal :size="20" />
